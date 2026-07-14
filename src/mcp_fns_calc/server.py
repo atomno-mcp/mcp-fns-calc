@@ -103,7 +103,14 @@ async def calc_vat(
     rate: Annotated[float, Field(default=20, description="Ставка НДС: 20/10/0 или спец 5/7 (УСН с 2025).")] = 20,
     mode: Annotated[str, Field(default="add", description="add — начислить сверху; extract — выделить из суммы.", pattern="^(add|extract)$")] = "add",
 ) -> dict[str, Any]:
-    """Расчёт НДС: начислить сверху или выделить из суммы (ст. 164, 168 НК РФ)."""
+    """Compute Russian VAT (НДС): add on top of net or extract from gross (NK RF art. 164, 168).
+
+    When to use: quick VAT math for invoices, USN special rates 5/7%, or gross↔net split.
+    When NOT to use: filing declarations or multi-line invoices — use accounting software.
+    Side effects: read-only, deterministic, offline; no auth or network.
+
+    Returns: {net, vat, gross, rate, mode, formula, article, disclaimer, snapshot_date}.
+    """
     return calculators.calc_vat(amount, rate, mode)
 
 
@@ -117,7 +124,14 @@ async def calc_usn(
     has_employees: Annotated[bool, Field(default=False, description="Есть работники (ограничивает вычет взносов 50%).")] = False,
     advances_paid: Annotated[float, Field(default=0, ge=0, description="Ранее уплаченные авансовые платежи.")] = 0,
 ) -> dict[str, Any]:
-    """Расчёт УСН: доходы 6% или доходы-минус-расходы 15% с мин.налогом (гл. 26.2 НК РФ)."""
+    """Calculate simplified tax (USN/УСН): 6% on income or 15% income-minus-expense with minimum tax (NK RF ch. 26.2).
+
+    When to use: estimate USN liability for a period; pass regional rate if below federal 6/15%.
+    When NOT to use: exact advance schedule or KKT reporting — consult tax calendar.
+    Side effects: read-only, deterministic, offline; no auth or network.
+
+    Returns: {tax, base, rate, min_tax, contributions_deduction, advances, formula, article, disclaimer}.
+    """
     return calculators.calc_usn(income, obj, expenses, rate, contributions_paid, has_employees, advances_paid)
 
 
@@ -127,7 +141,14 @@ async def calc_insurance_ip(
     year: Annotated[int, Field(default=2025, ge=2020, le=2030, description="Год расчёта.")] = 2025,
     months: Annotated[int, Field(default=12, ge=1, le=12, description="Полных месяцев деятельности (неполный год).")] = 12,
 ) -> dict[str, Any]:
-    """Страховые взносы ИП «за себя»: фикс. часть + 1% с дохода > 300 000 ₽ (ст. 430 НК РФ)."""
+    """IP fixed insurance contributions + 1% on income above 300k RUB (NK RF art. 430).
+
+    When to use: annual IP self-contribution estimate; set months<12 for partial year.
+    When NOT to use: employee payroll — use payroll tools; amounts for closed years without snapshot check.
+    Side effects: read-only, deterministic, offline; rates from bundled snapshot.
+
+    Returns: {fixed, extra_1pct, total, income, year, months, formula, article, disclaimer}.
+    """
     return calculators.calc_insurance_ip(income, year, months)
 
 
@@ -137,7 +158,14 @@ async def calc_ndfl(
     deductions: Annotated[float, Field(default=0, ge=0, description="Вычеты.")] = 0,
     year: Annotated[int, Field(default=2025, ge=2025, le=2030, description="Год (прогрессивная шкала с 2025).")] = 2025,
 ) -> dict[str, Any]:
-    """НДФЛ по прогрессивной шкале 2025+ (13/15/18/20/22%) с разбивкой по ступеням (ст. 224 НК РФ)."""
+    """Progressive personal income tax (NDFL/НДФЛ) 2025+ with per-bracket breakdown (NK RF art. 224).
+
+    When to use: estimate annual NDFL on salary or IP income after deductions.
+    When NOT to use: monthly withholding by employer — use payroll; non-resident rates not modeled.
+    Side effects: read-only, deterministic, offline; no auth or network.
+
+    Returns: {tax_total, taxable_base, brackets[], formula, article, disclaimer, snapshot_date}.
+    """
     return calculators.calc_ndfl(income, deductions, year)
 
 
@@ -148,7 +176,14 @@ async def calc_patent(
     contributions_paid: Annotated[float, Field(default=0, ge=0, description="Уплаченные страховые взносы.")] = 0,
     has_employees: Annotated[bool, Field(default=False, description="Есть работники (вычет взносов макс. 50%).")] = False,
 ) -> dict[str, Any]:
-    """Стоимость патента (ПСН): ПВД × 6% × месяцы/12 минус взносы (гл. 26.5 НК РФ)."""
+    """Patent taxation (PSN/ПСН) cost: potential income × 6% × months/12 minus contributions (NK RF ch. 26.5).
+
+    When to use: compare patent cost vs USN for an activity; potential_income from regional law.
+    When NOT to use: eligibility/OKVED limits — verify with FNS; employee-heavy cases need manual review.
+    Side effects: read-only, deterministic, offline; no auth or network.
+
+    Returns: {patent_cost, before_deduction, contributions_deduction, months, formula, article, disclaimer}.
+    """
     return calculators.calc_patent(potential_income, months, contributions_paid, has_employees)
 
 
@@ -159,7 +194,18 @@ async def calc_penalty(
     key_rate: Annotated[float | None, Field(default=None, description="Ключевая ставка ЦБ РФ, % годовых (если не задана — снапшот).")] = None,
     payer: Annotated[str, Field(default="ip", description="org (1/300 до 30 дн, далее 1/150); ip/individual (1/300).", pattern="^(org|ip|individual)$")] = "ip",
 ) -> dict[str, Any]:
-    """Пени за просрочку уплаты налога по ключевой ставке ЦБ РФ (ст. 75 НК РФ)."""
+    """Late-payment tax penalty (пени) using CBR key rate (NK RF art. 75).
+
+    When to use: estimate penalty on tax arrears for org/IP; org uses 1/300 for days 1–30 then 1/150.
+    When NOT to use: multi-period rates or interest on non-tax debts — use get_rates(fresh=true) for current key rate or legal counsel.
+    Side effects: read-only, deterministic, offline; no auth or network. Idempotent for same inputs.
+
+    payer: 'org' — 1/300 first 30 days, 1/150 thereafter; 'ip'|'individual' — 1/300 for all days.
+    key_rate: annual CBR %; if omitted uses bundled snapshot (see snapshot_date in response).
+
+    Returns: {penalty, amount, days, key_rate, payer, formula, article, disclaimer, snapshot_date}.
+    Example: amount=100000, days=45, payer='org' → split 30d@1/300 + 15d@1/150.
+    """
     return calculators.calc_penalty(amount, days, key_rate, payer)
 
 
@@ -168,7 +214,16 @@ async def get_rates(
     fresh: Annotated[bool, Field(default=False, description="true — тянуть свежие ставки с hosted (нужен ключ Pro); false — офлайн-снапшот.")] = False,
     kinds: Annotated[list[str] | None, Field(default=None, description="Фильтр: cbr_key_rate | ip_fixed_contrib | usn_limits | ndfl_scale | deflator.")] = None,
 ) -> dict[str, Any]:
-    """Актуальные ставки и лимиты: офлайн-снапшот или свежие с hosted (fresh=true, Pro)."""
+    """Tax rates and limits: offline snapshot (default) or live hosted pull (fresh=true, Pro key).
+
+    When to use: before calc_penalty/calc_usn if you need guaranteed-fresh CBR key rate or USN limits.
+    When NOT to use: full legal advice — snapshot may lag; fresh=true needs MCP_FNS_CALC_TOKEN.
+    Side effects: fresh=true performs HTTPS to hosted API; snapshot mode is read-only local.
+
+    kinds filter: cbr_key_rate | ip_fixed_contrib | usn_limits | ndfl_scale | deflator.
+
+    Returns: rate tables + snapshot_date or live payload + disclaimer.
+    """
     if fresh:
         return await _hosted_call("get_rates", lambda: _get_rates_fresh(kinds))
     return {
@@ -197,7 +252,14 @@ async def _get_rates_fresh(kinds: list[str] | None) -> dict[str, Any]:
 async def check_selfemployed(
     inn: Annotated[str, Field(min_length=10, max_length=12, description="ИНН физлица (10 или 12 цифр).")],
 ) -> dict[str, Any]:
-    """Статус самозанятого (НПД) по ИНН на дату запроса (сервис ФНС). Тариф Pro."""
+    """Check self-employed (NPD/НПД) status by taxpayer INN via FNS open data. Requires Pro API key.
+
+    When to use: before paying a sole proprietor as individual — mandatory NPD verification.
+    When NOT to use: offline what-if math — use calculators; without token returns missing_token error.
+    Side effects: read-only HTTPS to hosted backend; no local data mutation. Needs MCP_FNS_CALC_TOKEN.
+
+    Returns: {is_selfemployed, inn, checked_at, source, disclaimer} or error/missing_token.
+    """
     return await _hosted_call("check_selfemployed", lambda: _call(lambda c: c.check_selfemployed(inn)))
 
 
@@ -205,7 +267,14 @@ async def check_selfemployed(
 async def check_ip_status(
     inn: Annotated[str, Field(min_length=12, max_length=12, description="ИНН ИП (12 цифр).")],
 ) -> dict[str, Any]:
-    """Статус ИП, ОКВЭД и даты из ЕГРИП по ИНН. Тариф Pro."""
+    """IP registration status, OKVED and EGRIP dates by 12-digit INN. Requires Pro API key.
+
+    When to use: confirm counterparty is active IP before contract/payment.
+    When NOT to use: full EGRUL extract — use mcp-egrul; offline mode unavailable.
+    Side effects: read-only HTTPS; needs MCP_FNS_CALC_TOKEN.
+
+    Returns: {status, inn, okved, registration_date, ... disclaimer} or error.
+    """
     return await _hosted_call("check_ip_status", lambda: _call(lambda c: c.check_ip_status(inn)))
 
 
@@ -214,7 +283,14 @@ async def check_disqualified(
     inn: Annotated[str | None, Field(default=None, description="ИНН для поиска в реестре дисквалифицированных.")] = None,
     fio: Annotated[str | None, Field(default=None, description="ФИО для поиска (если нет ИНН).")] = None,
 ) -> dict[str, Any]:
-    """Совпадение с реестром дисквалифицированных лиц ФНС. Нейтральный результат, требует ручной верификации. Тариф Pro."""
+    """Match against FNS disqualified persons register by INN or FIO. Requires Pro API key.
+
+    When to use: compliance screen before appointing director/signatory; provide inn or fio.
+    When NOT to use: sole evidence for legal decisions — result is indicative, verify manually.
+    Side effects: read-only HTTPS; needs MCP_FNS_CALC_TOKEN. At least one of inn/fio required.
+
+    Returns: {matches[], query, disclaimer} or validation/error.
+    """
     if not inn and not fio:
         return {"error": "validation", "message_ru": "Нужно указать inn или fio."}
     return await _hosted_call("check_disqualified", lambda: _call(lambda c: c.check_disqualified(inn, fio)))
@@ -224,7 +300,14 @@ async def check_disqualified(
 async def check_account_block(
     inn: Annotated[str, Field(min_length=10, max_length=12, description="ИНН организации/ИП.")],
 ) -> dict[str, Any]:
-    """Сведения о приостановлении операций по счетам (сервис ФНС). Тариф Pro."""
+    """Bank account operation suspension info from FNS (10–12 digit INN). Requires Pro API key.
+
+    When to use: treasury/compliance check before large outbound payment.
+    When NOT to use: real-time bank balance — different service; offline unavailable.
+    Side effects: read-only HTTPS; needs MCP_FNS_CALC_TOKEN.
+
+    Returns: {suspended, inn, details, disclaimer} or error.
+    """
     return await _hosted_call("check_account_block", lambda: _call(lambda c: c.check_account_block(inn)))
 
 
@@ -232,7 +315,14 @@ async def check_account_block(
 async def check_tax_arrears(
     inn: Annotated[str, Field(min_length=10, max_length=12, description="ИНН организации/ИП.")],
 ) -> dict[str, Any]:
-    """Наличие недоимок/задолженности из открытых данных «Прозрачный бизнес» ФНС. Тариф Pro."""
+    """Tax arrears / debt flags from FNS Transparent Business open data. Requires Pro API key.
+
+    When to use: counterparty due diligence alongside mcp-fns-check; 10–12 digit INN.
+    When NOT to use: official debt certificate — request from FNS; offline unavailable.
+    Side effects: read-only HTTPS; needs MCP_FNS_CALC_TOKEN.
+
+    Returns: {has_arrears, inn, amounts[], disclaimer} or error.
+    """
     return await _hosted_call("check_tax_arrears", lambda: _call(lambda c: c.check_tax_arrears(inn)))
 
 

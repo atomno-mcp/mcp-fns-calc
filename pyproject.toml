@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atomno-mcp-fns-calc"
-version = "0.1.4"
+version = "0.1.5"
 description = "MCP server: Russian tax calculators (VAT, USN, ИП contributions, progressive NDFL 2025+, patent, penalty) offline + fiscal-status checks (self-employed/НПД, ИП/ОКВЭД, disqualified, account blocks, arrears) via hosted API."
 readme = "README.md"
 requires-python = ">=3.11"
