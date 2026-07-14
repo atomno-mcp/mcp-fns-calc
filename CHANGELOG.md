@@ -3,6 +3,12 @@
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 версионирование — [SemVer](https://semver.org/lang/ru/).
 
+## [0.1.6] — 2026-07-15
+
+### Changed
+- Расширены docstring'и MCP-тулзов (TDQS/Glama Quality): `calc_penalty`, `calc_vat`,
+  `calc_usn`, `get_rates` — when to use, parameters, returns, limitations, examples.
+
 ## [0.1.0] — 2026-07-04
 
 ### Added

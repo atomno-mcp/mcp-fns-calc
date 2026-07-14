@@ -105,11 +105,24 @@ async def calc_vat(
 ) -> dict[str, Any]:
     """Compute Russian VAT (НДС): add on top of net or extract from gross (NK RF art. 164, 168).
 
-    When to use: quick VAT math for invoices, USN special rates 5/7%, or gross↔net split.
-    When NOT to use: filing declarations or multi-line invoices — use accounting software.
-    Side effects: read-only, deterministic, offline; no auth or network.
+    **When to use**
+    - Invoice line: net→gross (mode=add) or gross→net+VAT (mode=extract).
+    - USN taxpayers on special VAT rates 5% or 7% (from 2025 rules).
+    - Quick sanity check before bookkeeping export.
 
-    Returns: {net, vat, gross, rate, mode, formula, article, disclaimer, snapshot_date}.
+    **When NOT to use**
+    - VAT declaration filing, multi-rate invoices, or export/zero-rate cases.
+    - Mixed taxable/exempt lines — sum per line in accounting software.
+
+    **Parameters**
+    - amount: base sum in RUB (net for add, gross for extract).
+    - rate: 20, 10, 0, 5, or 7 (percent).
+    - mode: `add` | `extract`.
+
+    **Returns**: {net, vat, gross, rate, mode, formula, article, disclaimer, snapshot_date}.
+
+    **Limitations**: read-only, offline, single-rate line; no side effects.
+    **Example**: amount=100000, rate=20, mode=add → vat=20000, gross=120000.
     """
     return calculators.calc_vat(amount, rate, mode)
 
@@ -126,11 +139,20 @@ async def calc_usn(
 ) -> dict[str, Any]:
     """Calculate simplified tax (USN/УСН): 6% on income or 15% income-minus-expense with minimum tax (NK RF ch. 26.2).
 
-    When to use: estimate USN liability for a period; pass regional rate if below federal 6/15%.
-    When NOT to use: exact advance schedule or KKT reporting — consult tax calendar.
-    Side effects: read-only, deterministic, offline; no auth or network.
+    **When to use**
+    - Estimate USN tax for a quarter/year before payment.
+    - Object `income` (6%): deduct paid IP contributions (capped at 50% if has_employees).
+    - Object `income_minus_expense` (15%): apply minimum tax 1% of income if 15% base is lower.
 
-    Returns: {tax, base, rate, min_tax, contributions_deduction, advances, formula, article, disclaimer}.
+    **When NOT to use**
+    - Exact advance-payment calendar or KKT cash reporting.
+    - Taxpayers above USN income limits — check get_rates for limits first.
+
+    **Parameters**: income, obj, expenses, rate (regional override), contributions_paid, has_employees, advances_paid.
+
+    **Returns**: {tax, base, rate, min_tax, contributions_deduction, advances, formula, article, disclaimer}.
+
+    **Limitations**: read-only, offline; regional rates optional; subtracts advances_paid from result.
     """
     return calculators.calc_usn(income, obj, expenses, rate, contributions_paid, has_employees, advances_paid)
 
@@ -189,22 +211,46 @@ async def calc_patent(
 
 @mcp.tool
 async def calc_penalty(
-    amount: Annotated[float, Field(ge=0, description="Сумма недоимки.")],
-    days: Annotated[int, Field(ge=0, description="Дней просрочки.")],
-    key_rate: Annotated[float | None, Field(default=None, description="Ключевая ставка ЦБ РФ, % годовых (если не задана — снапшот).")] = None,
-    payer: Annotated[str, Field(default="ip", description="org (1/300 до 30 дн, далее 1/150); ip/individual (1/300).", pattern="^(org|ip|individual)$")] = "ip",
+    amount: Annotated[float, Field(ge=0, description="Сумма недоимки (руб.), на которую начисляются пени.")],
+    days: Annotated[int, Field(ge=0, description="Число календарных дней просрочки с даты, когда платёж должен был быть уплачен.")],
+    key_rate: Annotated[float | None, Field(default=None, description="Ключевая ставка ЦБ РФ, % годовых. Если не задана — берётся из встроенного снапшота (см. snapshot_date в ответе).")] = None,
+    payer: Annotated[str, Field(default="ip", description="Тип плательщика: org (организация), ip (ИП), individual (физлицо, не ИП).", pattern="^(org|ip|individual)$")] = "ip",
 ) -> dict[str, Any]:
-    """Late-payment tax penalty (пени) using CBR key rate (NK RF art. 75).
+    """Estimate late-payment tax penalty (пени) per NK RF art. 75 using the CBR key rate.
 
-    When to use: estimate penalty on tax arrears for org/IP; org uses 1/300 for days 1–30 then 1/150.
-    When NOT to use: multi-period rates or interest on non-tax debts — use get_rates(fresh=true) for current key rate or legal counsel.
-    Side effects: read-only, deterministic, offline; no auth or network. Idempotent for same inputs.
+    **When to use**
+    - Quick what-if: how much penalty accrues on a known arrears amount and delay in days.
+    - Org vs IP/individual: orgs use 1/300 for days 1–30, then 1/150; IP and individuals use 1/300 for all days.
+    - Before a payment plan or negotiation — ballpark figure, not a filing document.
 
-    payer: 'org' — 1/300 first 30 days, 1/150 thereafter; 'ip'|'individual' — 1/300 for all days.
-    key_rate: annual CBR %; if omitted uses bundled snapshot (see snapshot_date in response).
+    **When NOT to use**
+    - Multi-period calculation where the key rate changed during the delay (this tool uses one flat rate).
+    - Penalties on non-tax debts (commercial loans, fines outside NK art. 75).
+    - Official amount on a tax notice — always take the figure from FNS/LK; use this tool only for estimates.
 
-    Returns: {penalty, amount, days, key_rate, payer, formula, article, disclaimer, snapshot_date}.
-    Example: amount=100000, days=45, payer='org' → split 30d@1/300 + 15d@1/150.
+    **Parameters**
+    - amount: principal arrears in RUB (non-negative).
+    - days: calendar days of delay (0 → penalty 0).
+    - key_rate: annual CBR %; omit to use bundled snapshot default (response includes warning_ru if default used).
+    - payer: `org` | `ip` | `individual` — selects the 1/300 vs 1/150 split for legal entities.
+
+    **Returns** (dict)
+    - penalty (float): total penalty in RUB, rounded to kopecks.
+    - amount, days, key_rate, payer: echo inputs used in the formula.
+    - formula (str): human-readable breakdown.
+    - article: "ст. 75 НК РФ".
+    - snapshot_date, disclaimer, source: metadata for audit trail.
+    - warning_ru (optional): present when key_rate was taken from snapshot, not passed explicitly.
+
+    **Limitations**
+    - Single key rate for the whole period; for rate changes call get_rates(fresh=true) and run per sub-period manually.
+    - Does not include other sanctions (штрафы) under NK art. 122/123 — only пени art. 75.
+    - Read-only, offline, deterministic; no side effects; idempotent for identical inputs.
+
+    **Examples**
+    - Org, 100_000 RUB, 45 days, key_rate=21: days 1–30 @ amount×21%/300×30 + days 31–45 @ amount×21%/150×15.
+    - IP, 50_000 RUB, 10 days: amount×rate%/300×10 for all days.
+    - days=0 → penalty=0 regardless of amount.
     """
     return calculators.calc_penalty(amount, days, key_rate, payer)
 
@@ -216,13 +262,21 @@ async def get_rates(
 ) -> dict[str, Any]:
     """Tax rates and limits: offline snapshot (default) or live hosted pull (fresh=true, Pro key).
 
-    When to use: before calc_penalty/calc_usn if you need guaranteed-fresh CBR key rate or USN limits.
-    When NOT to use: full legal advice — snapshot may lag; fresh=true needs MCP_FNS_CALC_TOKEN.
-    Side effects: fresh=true performs HTTPS to hosted API; snapshot mode is read-only local.
+    **When to use**
+    - Before calc_penalty: pass fresh CBR key_rate or read cbr_key_rate_default from snapshot.
+    - Before calc_usn/calc_insurance_ip: verify USN income limits and IP contribution fixed amounts.
+    - kinds filter narrows response: cbr_key_rate | ip_fixed_contrib | usn_limits | ndfl_scale | deflator.
 
-    kinds filter: cbr_key_rate | ip_fixed_contrib | usn_limits | ndfl_scale | deflator.
+    **When NOT to use**
+    - Legal interpretation of limits — snapshot may lag; use fresh=true for production DD.
 
-    Returns: rate tables + snapshot_date or live payload + disclaimer.
+    **Parameters**
+    - fresh: false (default) = bundled snapshot, no network; true = hosted API (MCP_FNS_CALC_TOKEN).
+    - kinds: optional list to subset tables.
+
+    **Returns**: rate tables, snapshot_date (offline) or live payload + disclaimer.
+
+    **Limitations**: fresh=true requires Pro token; snapshot date fixed at package build time.
     """
     if fresh:
         return await _hosted_call("get_rates", lambda: _get_rates_fresh(kinds))
