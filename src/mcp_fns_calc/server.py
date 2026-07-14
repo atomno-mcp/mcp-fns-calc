@@ -4,7 +4,7 @@
 calc_insurance_ip, calc_ndfl, calc_patent, calc_penalty, get_rates (снапшот).
 Hosted-тулзы (тариф Pro, ключ MCP_FNS_CALC_TOKEN): check_selfemployed,
 check_ip_status, check_disqualified, check_account_block, check_tax_arrears и
-свежий get_rates. Каждый ответ содержит disclaimer/source (см. spec, раздел 8).
+свежий get_rates. Каждый ответ содержит disclaimer и ссылку на первоисточник.
 """
 
 from __future__ import annotations

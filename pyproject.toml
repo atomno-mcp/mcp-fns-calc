@@ -9,7 +9,7 @@ description = "MCP server: Russian tax calculators (VAT, USN, ИП contributions
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "atomno-mcp", email = "hello@atomno-mcp.ru" }]
+authors = [{ name = "atomno-mcp", email = "hello@atomno.ru" }]
 keywords = [
   "mcp",
   "model-context-protocol",
