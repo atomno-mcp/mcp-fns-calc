@@ -1,18 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "mcp-fns-calc",
+  "name": "io.github.atomno-mcp/mcp-fns-calc",
+  "title": "mcp-fns-calc",
   "description": "Russian tax calculators (VAT, USN, NDFL) and FNS fiscal-status checks via MCP.",
   "repository": {
     "url": "https://github.com/atomno-mcp/mcp-fns-calc",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.1.4",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "atomno-mcp-fns-calc",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
