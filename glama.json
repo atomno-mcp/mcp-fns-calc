@@ -1,4 +1,8 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["atomnos"]
+  "maintainers": [
+    "atomnos"
+  ],
+  "name": "mcp-fns-calc",
+  "description": "Russian tax calculators (VAT, USN, NDFL) and FNS fiscal-status checks via MCP."
 }
