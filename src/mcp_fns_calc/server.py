@@ -22,6 +22,7 @@ from . import __version__, calculators, rates
 from .client import FnsCalcClient
 from .config import Settings
 from .errors import BackendError, FnsCalcError
+from .person_notice import attach_disqualified_notice
 
 logger = logging.getLogger("mcp_fns_calc")
 
@@ -347,7 +348,10 @@ async def check_disqualified(
     """
     if not inn and not fio:
         return {"error": "validation", "message_ru": "Нужно указать inn или fio."}
-    return await _hosted_call("check_disqualified", lambda: _call(lambda c: c.check_disqualified(inn, fio)))
+    result = await _hosted_call(
+        "check_disqualified", lambda: _call(lambda c: c.check_disqualified(inn, fio))
+    )
+    return attach_disqualified_notice(result)
 
 
 @mcp.tool
