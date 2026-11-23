@@ -3,6 +3,12 @@
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 версионирование — [SemVer](https://semver.org/lang/ru/).
 
+## [0.1.8] — 2026-11-23
+
+### Fixed
+
+- Обновлён публичный адрес автора пакета.
+
 ## [0.1.7] — 2026-09-02
 
 ### Added
@@ -27,3 +33,5 @@
   `check_disqualified`, `check_account_block`, `check_tax_arrears`.
 - CLI argparse: `--help`, `--version`, `--transport`, `--host`, `--port`, `--log-level`.
 - Дисклеймер и ссылка на первоисточник в каждом ответе.
+
+[0.1.8]: https://github.com/atomno-mcp/mcp-fns-calc/releases/tag/v0.1.8

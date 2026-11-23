@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 HOMONYM_WARNING_RU = (
@@ -43,8 +43,8 @@ def format_queried_at_ru(when: datetime | str | None) -> str:
     else:
         dt = when
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC)
     return f"{dt.day} {_MONTHS_RU[dt.month]} {dt.year}, {dt:%H:%M} UTC"
 
 

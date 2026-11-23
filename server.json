@@ -7,13 +7,13 @@
     "url": "https://github.com/atomno-mcp/mcp-fns-calc",
     "source": "github"
   },
-  "version": "0.1.7",
+  "version": "0.1.8",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "atomno-mcp-fns-calc",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
